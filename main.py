@@ -63,23 +63,21 @@ async def read_file(fileID: Annotated[str, Path(title="The ID of the file to rea
         print(f"Reading metadata of file #{fileID} unsuccessful")
         raise HTTPException(status_code=500 , detail="Reading metadata failed")
     print(f"Reading file #{fileID}")
-    chunks = []
-    for i in sorted(file_info.chunk_list , key=lambda c: c.chunk_index):
-        for _ in range(3):
-            slave_choice = random.choice(i.replica_pod_list)
-            print(f"Downloading file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice}")
-            res = requests.get(f"http://{slave_choice}.{DFS_SLAVE_SERVICE_URL}/api/v1/slave/chunk/get/{i.chunk_id}")
-            if res.status_code == 200:
-                chunks.append(res.content)
-                print(f"Downloaded file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice} successfully")
-                break
-            print(f"Downloading file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice} unsuccessful. Failure reason {res}")
+    async def yield_chunks():
+        for i in sorted(file_info.chunk_list , key=lambda c: c.chunk_index):
+            for _ in range(3):
+                slave_choice = random.choice(i.replica_pod_list)
+                print(f"Downloading file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice}")
+                res = requests.get(f"http://{slave_choice}.{DFS_SLAVE_SERVICE_URL}/api/v1/slave/chunk/get/{i.chunk_id}")
+                if res.status_code == 200:
+                    yield res.content
+                    print(f"Downloaded file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice} successfully")
+                    break
+                print(f"Downloading file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice} unsuccessful. Failure reason {res}")
 
-    whole_file = io.BytesIO(b"".join(chunks))
-    whole_file.seek(0)
     encoded_filename = quote(file_info.file_name)
     return StreamingResponse(
-        whole_file,
+        yield_chunks(),
         media_type="application/octet-stream",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
