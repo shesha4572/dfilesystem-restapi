@@ -64,7 +64,7 @@ async def read_file(fileID: Annotated[str, Path(title="The ID of the file to rea
         raise HTTPException(status_code=500 , detail="Reading metadata failed")
     print(f"Reading file #{fileID}")
     chunks = []
-    for i in sorted(file_info.chunk_list , key=lambda c: c.chunk_id):
+    for i in sorted(file_info.chunk_list , key=lambda c: c.chunk_index):
         for _ in range(3):
             slave_choice = random.choice(i.replica_pod_list)
             print(f"Downloading file #{file_info.file_id} chunk #{i.chunk_id} from {slave_choice}")
